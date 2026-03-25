@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import time
+from random import uniform
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
@@ -25,12 +26,16 @@ class BrowseTableScraper:
         start_url: str,
         selectors: Selectors | None = None,
         max_empty_pages: int = 2,
+        min_delay_seconds: float = 0.6,
+        max_delay_seconds: float = 1.8,
     ):
         self.context = context
         self.page = context.new_page()
         self.start_url = start_url
         self.selectors = selectors or Selectors()
         self.max_empty_pages = max_empty_pages
+        self.min_delay_seconds = min_delay_seconds
+        self.max_delay_seconds = max_delay_seconds
 
     def open(self) -> None:
         self.page.goto(self.start_url, wait_until="domcontentloaded")
@@ -83,6 +88,7 @@ class BrowseTableScraper:
 
             try:
                 page = self.context.new_page()
+                self._human_delay()
                 page.goto(url, wait_until="domcontentloaded", timeout=45_000)
                 page.wait_for_timeout(1000)
                 detail = self._extract_detail_table(page)
@@ -100,6 +106,7 @@ class BrowseTableScraper:
         return details
 
     def _wait_table_ready(self) -> None:
+        self._human_delay()
         self.page.wait_for_timeout(700)
         spinner = self.page.locator(self.selectors.loading_spinner)
         if spinner.count() > 0:
@@ -143,6 +150,7 @@ class BrowseTableScraper:
             return False
 
         before = self.page.locator(self.selectors.row).first.inner_text() if self.page.locator(self.selectors.row).count() else ""
+        self._human_delay()
         next_btn.click()
         self.page.wait_for_timeout(1200)
         self.page.wait_for_load_state("domcontentloaded")
@@ -184,3 +192,8 @@ class BrowseTableScraper:
             if key and value:
                 data[key] = value
         return data
+
+    def _human_delay(self) -> None:
+        minimum = max(0.0, self.min_delay_seconds)
+        maximum = max(minimum, self.max_delay_seconds)
+        time.sleep(uniform(minimum, maximum))

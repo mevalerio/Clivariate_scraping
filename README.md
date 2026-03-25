@@ -40,6 +40,12 @@ playwright install chromium
 python -m scraper.run --headed
 ```
 
+With randomized delays between navigation actions:
+
+```bash
+python -m scraper.run --headed --min-delay 1.2 --max-delay 3.0
+```
+
 Headless mode (default):
 
 ```bash
@@ -100,4 +106,5 @@ PY
 - You likely need valid JCR access/authentication in the browser session.
 - Selectors are intentionally centralized in `scraper/browse_table.py` (`Selectors` dataclass) to adjust when UI changes.
 - For Angular Material pages (like `mat-table`), default row parsing now supports `mat-table mat-row` in addition to classic `table tbody tr`.
+- To reduce bot-like timing patterns, use `--min-delay` / `--max-delay` to randomize pauses between table/detail navigation actions.
 - For robustness: keep retries conservative and review `failed_detail_urls` in `state.json` after runs.

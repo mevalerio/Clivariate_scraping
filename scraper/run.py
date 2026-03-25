@@ -17,6 +17,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--details-json", default="data/details.json", help="Path to detail JSON")
     parser.add_argument("--details-csv", default="data/details.csv", help="Path to detail CSV")
     parser.add_argument("--headed", action="store_true", help="Run browser in headed mode")
+    parser.add_argument("--min-delay", type=float, default=0.6, help="Minimum randomized delay between actions (seconds)")
+    parser.add_argument("--max-delay", type=float, default=1.8, help="Maximum randomized delay between actions (seconds)")
     return parser.parse_args()
 
 
@@ -35,7 +37,12 @@ def main() -> None:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=not args.headed)
         context = browser.new_context()
-        scraper = BrowseTableScraper(context=context, start_url=args.url)
+        scraper = BrowseTableScraper(
+            context=context,
+            start_url=args.url,
+            min_delay_seconds=args.min_delay,
+            max_delay_seconds=args.max_delay,
+        )
 
         rows = scraper.collect_table_rows(state)
         for row in rows:
