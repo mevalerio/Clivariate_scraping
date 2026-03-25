@@ -123,9 +123,11 @@ PY
 
 - You likely need valid JCR access/authentication in the browser session.
 - Selectors are intentionally centralized in `scraper/browse_table.py` (`Selectors` dataclass) to adjust when UI changes.
-- For Angular Material pages (like `mat-table`), default row parsing now supports `mat-table mat-row` in addition to classic `table tbody tr`.
+- For Angular Material pages (like `mat-table`), default row parsing supports `mat-row` / `cdk-row` variants in addition to classic `table tbody tr`.
+- If a table row has no clickable detail link, table extraction still captures it (title defaults to first visible cell text).
 - To reduce bot-like timing patterns, use `--min-delay` / `--max-delay` to randomize pauses between table/detail navigation actions.
 - To run a lightweight smoke test, use `--max-table-pages` and `--max-detail-urls` so you only scrape a small subset.
 - If you only need data from the main browse table, run with `--table-only` to skip detail-page crawling completely.
 - The scraper attempts to auto-accept common cookie consent banners (e.g., `Accept`, `I Agree`, OneTrust buttons) before table extraction.
+- If page source only shows `<div class=\"incites-jcr3-fe-root\"></div>`, that's the SPA shell before hydration; scraper now waits for root content and table rows.
 - For robustness: keep retries conservative and review `failed_detail_urls` in `state.json` after runs.

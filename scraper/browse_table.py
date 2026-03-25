@@ -6,14 +6,14 @@ from random import uniform
 from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
-from playwright.sync_api import BrowserContext, Page
+from playwright.sync_api import BrowserContext, Page, TimeoutError as PlaywrightTimeoutError
 
 from scraper.models import CrawlState, JournalRow
 
 
 @dataclass
 class Selectors:
-    row: str = "mat-table mat-row, table tbody tr"
+    row: str = "mat-table mat-row, mat-table .mat-row, mat-table .cdk-row, mat-table .mat-mdc-row, mat-table [role='row']:has(mat-cell), table tbody tr"
     next_button: str = "button[aria-label*='Next'], .pagination-next button, .mat-paginator-navigation-next"
     loading_spinner: str = ".loading, .spinner, .mat-progress-spinner"
     title_cell_link: str = "a, td a, mat-cell a"
@@ -49,6 +49,14 @@ class BrowseTableScraper:
 
     def open(self) -> None:
         self.page.goto(self.start_url, wait_until="domcontentloaded")
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=15_000)
+        except PlaywrightTimeoutError:
+            pass
+        try:
+            self.page.wait_for_selector("div.incites-jcr3-fe-root > *", state="attached", timeout=15_000)
+        except PlaywrightTimeoutError:
+            pass
         self.page.wait_for_timeout(1500)
         self._dismiss_cookie_banner()
 
@@ -72,6 +80,7 @@ class BrowseTableScraper:
                 empty_streak += 1
                 if empty_streak > self.max_empty_pages:
                     break
+                self.page.wait_for_timeout(2500)
                 self.page.reload(wait_until="domcontentloaded")
                 self._dismiss_cookie_banner()
                 continue
@@ -84,7 +93,7 @@ class BrowseTableScraper:
                 if parsed.key in state.seen_keys:
                     continue
                 state.seen_keys.add(parsed.key)
-                if enqueue_detail_urls:
+                if enqueue_detail_urls and parsed.detail_url:
                     state.pending_detail_urls.append(parsed.detail_url)
                 new_rows.append(parsed)
 
@@ -139,26 +148,34 @@ class BrowseTableScraper:
         self._dismiss_cookie_banner()
         self._human_delay()
         self.page.wait_for_timeout(700)
+        try:
+            self.page.wait_for_selector(self.selectors.row, state="attached", timeout=10_000)
+        except PlaywrightTimeoutError:
+            pass
         spinner = self.page.locator(self.selectors.loading_spinner)
         if spinner.count() > 0:
             self.page.wait_for_timeout(1500)
 
     def _parse_row(self, row_locator, page_number: int) -> JournalRow | None:
-        link = row_locator.locator(self.selectors.title_cell_link).first
-        if link.count() == 0:
-            return None
-
-        title = link.inner_text().strip()
-        href = link.get_attribute("href")
-        detail_url = urljoin(self.page.url, href or "")
-        if not detail_url:
-            return None
-
         cells = [c.strip() for c in row_locator.locator("td, mat-cell, .mat-mdc-cell").all_inner_texts()]
         if not cells:
             text = row_locator.inner_text().strip()
             if text:
                 cells = [part.strip() for part in text.split("\n") if part.strip()]
+
+        link = row_locator.locator(self.selectors.title_cell_link).first
+        title = ""
+        detail_url = ""
+        if link.count() > 0:
+            title = link.inner_text().strip()
+            href = link.get_attribute("href")
+            detail_url = urljoin(self.page.url, href or "")
+
+        if not title and cells:
+            title = cells[0]
+        if not title:
+            return None
+
         issn = self._extract_issn(cells)
         key = issn or self._normalize_key(title)
         return JournalRow(
