@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import time
 from random import uniform
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
 from playwright.sync_api import BrowserContext, Page
@@ -17,6 +17,16 @@ class Selectors:
     next_button: str = "button[aria-label*='Next'], .pagination-next button, .mat-paginator-navigation-next"
     loading_spinner: str = ".loading, .spinner, .mat-progress-spinner"
     title_cell_link: str = "a, td a, mat-cell a"
+    cookie_accept_buttons: tuple[str, ...] = field(
+        default_factory=lambda: (
+            "button:has-text('Accept')",
+            "button:has-text('I Agree')",
+            "button:has-text('Agree')",
+            "button:has-text('Allow all')",
+            "#onetrust-accept-btn-handler",
+            "button#accept-recommended-btn-handler",
+        )
+    )
 
 
 class BrowseTableScraper:
@@ -40,8 +50,14 @@ class BrowseTableScraper:
     def open(self) -> None:
         self.page.goto(self.start_url, wait_until="domcontentloaded")
         self.page.wait_for_timeout(1500)
+        self._dismiss_cookie_banner()
 
-    def collect_table_rows(self, state: CrawlState) -> list[JournalRow]:
+    def collect_table_rows(
+        self,
+        state: CrawlState,
+        max_table_pages: int | None = None,
+        enqueue_detail_urls: bool = True,
+    ) -> list[JournalRow]:
         self.open()
         new_rows: list[JournalRow] = []
         empty_streak = 0
@@ -57,6 +73,7 @@ class BrowseTableScraper:
                 if empty_streak > self.max_empty_pages:
                     break
                 self.page.reload(wait_until="domcontentloaded")
+                self._dismiss_cookie_banner()
                 continue
 
             empty_streak = 0
@@ -67,8 +84,12 @@ class BrowseTableScraper:
                 if parsed.key in state.seen_keys:
                     continue
                 state.seen_keys.add(parsed.key)
-                state.pending_detail_urls.append(parsed.detail_url)
+                if enqueue_detail_urls:
+                    state.pending_detail_urls.append(parsed.detail_url)
                 new_rows.append(parsed)
+
+            if max_table_pages is not None and current_page >= max_table_pages:
+                break
 
             if not self._go_to_next_page():
                 break
@@ -78,10 +99,18 @@ class BrowseTableScraper:
 
         return new_rows
 
-    def scrape_journal_details(self, state: CrawlState, max_retries: int = 3) -> list[dict[str, str]]:
+    def scrape_journal_details(
+        self,
+        state: CrawlState,
+        max_retries: int = 3,
+        max_detail_urls: int | None = None,
+    ) -> list[dict[str, str]]:
         details: list[dict[str, str]] = []
+        processed = 0
 
         while state.pending_detail_urls:
+            if max_detail_urls is not None and processed >= max_detail_urls:
+                break
             url = state.pending_detail_urls.pop(0)
             if url in state.completed_detail_urls:
                 continue
@@ -95,6 +124,7 @@ class BrowseTableScraper:
                 detail["detail_url"] = url
                 details.append(detail)
                 state.completed_detail_urls.add(url)
+                processed += 1
                 page.close()
             except Exception:
                 attempts = state.failed_detail_urls.get(url, 0) + 1
@@ -106,6 +136,7 @@ class BrowseTableScraper:
         return details
 
     def _wait_table_ready(self) -> None:
+        self._dismiss_cookie_banner()
         self._human_delay()
         self.page.wait_for_timeout(700)
         spinner = self.page.locator(self.selectors.loading_spinner)
@@ -197,3 +228,17 @@ class BrowseTableScraper:
         minimum = max(0.0, self.min_delay_seconds)
         maximum = max(minimum, self.max_delay_seconds)
         time.sleep(uniform(minimum, maximum))
+
+    def _dismiss_cookie_banner(self) -> bool:
+        for selector in self.selectors.cookie_accept_buttons:
+            button = self.page.locator(selector).first
+            if button.count() == 0:
+                continue
+            try:
+                if button.is_visible():
+                    button.click(timeout=2_000)
+                    self.page.wait_for_timeout(500)
+                    return True
+            except Exception:
+                continue
+        return False

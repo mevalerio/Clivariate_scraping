@@ -46,6 +46,24 @@ With randomized delays between navigation actions:
 python -m scraper.run --headed --min-delay 1.2 --max-delay 3.0
 ```
 
+Quick small-batch test (example: first 2 table pages and 5 detail URLs):
+
+```bash
+python -m scraper.run --headed --max-table-pages 2 --max-detail-urls 5
+```
+
+Table-only mode (skip all journal detail page visits):
+
+```bash
+python -m scraper.run --headed --table-only
+```
+
+Minimal verification run (first part of table only):
+
+```bash
+python -m scraper.run --headed --table-only --max-table-pages 1
+```
+
 Headless mode (default):
 
 ```bash
@@ -107,4 +125,7 @@ PY
 - Selectors are intentionally centralized in `scraper/browse_table.py` (`Selectors` dataclass) to adjust when UI changes.
 - For Angular Material pages (like `mat-table`), default row parsing now supports `mat-table mat-row` in addition to classic `table tbody tr`.
 - To reduce bot-like timing patterns, use `--min-delay` / `--max-delay` to randomize pauses between table/detail navigation actions.
+- To run a lightweight smoke test, use `--max-table-pages` and `--max-detail-urls` so you only scrape a small subset.
+- If you only need data from the main browse table, run with `--table-only` to skip detail-page crawling completely.
+- The scraper attempts to auto-accept common cookie consent banners (e.g., `Accept`, `I Agree`, OneTrust buttons) before table extraction.
 - For robustness: keep retries conservative and review `failed_detail_urls` in `state.json` after runs.

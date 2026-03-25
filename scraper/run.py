@@ -19,6 +19,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headed", action="store_true", help="Run browser in headed mode")
     parser.add_argument("--min-delay", type=float, default=0.6, help="Minimum randomized delay between actions (seconds)")
     parser.add_argument("--max-delay", type=float, default=1.8, help="Maximum randomized delay between actions (seconds)")
+    parser.add_argument("--max-table-pages", type=int, default=None, help="Stop after scraping this many table pages")
+    parser.add_argument("--max-detail-urls", type=int, default=None, help="Stop after scraping this many detail URLs")
+    parser.add_argument("--table-only", action="store_true", help="Only scrape main table rows and skip detail-page visits")
     return parser.parse_args()
 
 
@@ -44,11 +47,17 @@ def main() -> None:
             max_delay_seconds=args.max_delay,
         )
 
-        rows = scraper.collect_table_rows(state)
+        rows = scraper.collect_table_rows(
+            state,
+            max_table_pages=args.max_table_pages,
+            enqueue_detail_urls=not args.table_only,
+        )
         for row in rows:
             append_jsonl(rows_path, row)
 
-        details = scraper.scrape_journal_details(state)
+        details: list[dict[str, str]] = []
+        if not args.table_only:
+            details = scraper.scrape_journal_details(state, max_detail_urls=args.max_detail_urls)
         save_state(state_path, state)
 
         details_json_path.parent.mkdir(parents=True, exist_ok=True)
