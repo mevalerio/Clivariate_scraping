@@ -99,4 +99,5 @@ PY
 
 - You likely need valid JCR access/authentication in the browser session.
 - Selectors are intentionally centralized in `scraper/browse_table.py` (`Selectors` dataclass) to adjust when UI changes.
+- For Angular Material pages (like `mat-table`), default row parsing now supports `mat-table mat-row` in addition to classic `table tbody tr`.
 - For robustness: keep retries conservative and review `failed_detail_urls` in `state.json` after runs.

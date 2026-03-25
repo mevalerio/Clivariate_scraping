@@ -12,10 +12,10 @@ from scraper.models import CrawlState, JournalRow
 
 @dataclass
 class Selectors:
-    row: str = "table tbody tr"
+    row: str = "mat-table mat-row, table tbody tr"
     next_button: str = "button[aria-label*='Next'], .pagination-next button, .mat-paginator-navigation-next"
     loading_spinner: str = ".loading, .spinner, .mat-progress-spinner"
-    title_cell_link: str = "td a"
+    title_cell_link: str = "a, td a, mat-cell a"
 
 
 class BrowseTableScraper:
@@ -116,7 +116,11 @@ class BrowseTableScraper:
         if not detail_url:
             return None
 
-        cells = [c.strip() for c in row_locator.locator("td").all_inner_texts()]
+        cells = [c.strip() for c in row_locator.locator("td, mat-cell, .mat-mdc-cell").all_inner_texts()]
+        if not cells:
+            text = row_locator.inner_text().strip()
+            if text:
+                cells = [part.strip() for part in text.split("\n") if part.strip()]
         issn = self._extract_issn(cells)
         key = issn or self._normalize_key(title)
         return JournalRow(
